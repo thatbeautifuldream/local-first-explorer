@@ -1,101 +1,201 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ChevronDown, ChevronRight, File, FolderOpen } from "lucide-react";
+import { useEffect, useState } from "react";
+import { commonFilters, useFileSystem } from "use-file-system";
+
+interface FileNode {
+  name: string;
+  type: "file" | "directory";
+  children?: FileNode[];
+  path: string;
+}
+
+export default function Page() {
+  const [fileTree, setFileTree] = useState<FileNode | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const { onDirectorySelection, files, isBrowserSupported } = useFileSystem({
+    filters: commonFilters,
+    onFilesAdded: (newFiles) => {
+      console.log("Files added:", newFiles);
+      updateFileTree(files);
+    },
+    onFilesChanged: (changedFiles) => {
+      console.log("Files changed:", changedFiles);
+      updateFileTree(files);
+    },
+    onFilesDeleted: (deletedFiles) => {
+      console.log("Files deleted:", deletedFiles);
+      updateFileTree(files);
+    },
+  });
+
+  useEffect(() => {
+    updateFileTree(files);
+  }, [files]);
+
+  const updateFileTree = (files: Map<string, File>) => {
+    setIsLoading(true);
+    const root: FileNode = {
+      name: "Root",
+      type: "directory",
+      children: [],
+      path: "",
+    };
+    files.forEach((file, path) => {
+      const parts = path.split("/");
+      let current = root;
+      parts.forEach((part, index) => {
+        if (index === parts.length - 1) {
+          current.children?.push({ name: part, type: "file", path });
+        } else {
+          let child = current.children?.find((c) => c.name === part);
+          if (!child) {
+            child = {
+              name: part,
+              type: "directory",
+              children: [],
+              path: parts.slice(0, index + 1).join("/"),
+            };
+            current.children?.push(child);
+          }
+          current = child;
+        }
+      });
+    });
+    setFileTree(root.children?.[0] || null);
+    setIsLoading(false);
+  };
+
+  const handleFileSelect = (path: string) => {
+    const file = files.get(path);
+    if (file) {
+      setSelectedFile(file);
+    }
+  };
+
+  const renderFileTree = (node: FileNode) => {
+    return (
+      <div key={node.path} className="pl-4">
+        {node.type === "directory" ? (
+          <div>
+            <Button
+              variant="ghost"
+              className="p-1 h-8 w-full justify-start"
+              onClick={() => handleFileSelect(node.path)}
+            >
+              {node.children && node.children.length > 0 ? (
+                <ChevronDown className="h-4 w-4 mr-1" />
+              ) : (
+                <ChevronRight className="h-4 w-4 mr-1" />
+              )}
+              <FolderOpen className="h-4 w-4 mr-2" />
+              {node.name}
+            </Button>
+            {node.children &&
+              node.children.map((child) => renderFileTree(child))}
+          </div>
+        ) : (
+          <Button
+            variant="ghost"
+            className="p-1 h-8 w-full justify-start"
+            onClick={() => handleFileSelect(node.path)}
+          >
+            <File className="h-4 w-4 mr-2" />
+            {node.name}
+          </Button>
+        )}
+      </div>
+    );
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return bytes + " bytes";
+    else if (bytes < 1048576) return (bytes / 1024).toFixed(2) + " KB";
+    else if (bytes < 1073741824) return (bytes / 1048576).toFixed(2) + " MB";
+    else return (bytes / 1073741824).toFixed(2) + " GB";
+  };
+
+  const formatDate = (date: number | Date) => {
+    const dateObject = typeof date === "number" ? new Date(date) : date;
+    return new Intl.DateTimeFormat("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: true,
+    }).format(dateObject);
+  };
+
+  if (!isBrowserSupported) {
+    return (
+      <div className="p-4 text-red-500">
+        Your browser does not support the File System Access API. Please try
+        again in a different browser, such as Chrome.
+      </div>
+    );
+  }
+
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
-
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+    <div className="flex h-screen p-4">
+      <div className="w-1/3 border-r pr-4">
+        <Button onClick={onDirectorySelection} className="w-full mb-4">
+          Import Folder
+        </Button>
+        <ScrollArea className="h-[calc(100vh-120px)]">
+          {isLoading ? (
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-[250px]" />
+              <Skeleton className="h-4 w-[200px]" />
+              <Skeleton className="h-4 w-[220px]" />
+            </div>
+          ) : fileTree ? (
+            renderFileTree(fileTree)
+          ) : (
+            <div className="text-center text-gray-500">
+              Import a folder to view its contents
+            </div>
+          )}
+        </ScrollArea>
+      </div>
+      <div className="w-2/3 pl-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>File Metadata</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {selectedFile ? (
+              <div className="space-y-2">
+                <p>
+                  <strong>Name:</strong> {selectedFile.name}
+                </p>
+                <p>
+                  <strong>Size:</strong> {formatFileSize(selectedFile.size)}
+                </p>
+                <p>
+                  <strong>Type:</strong> {selectedFile.type || "Unknown"}
+                </p>
+                <p>
+                  <strong>Last Modified:</strong>{" "}
+                  {formatDate(selectedFile.lastModified)}
+                </p>
+              </div>
+            ) : (
+              <div className="text-center text-gray-500">
+                Select a file to view its metadata
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
